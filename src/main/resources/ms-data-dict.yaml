@@ -1,0 +1,133 @@
+tables:
+       - name: billing
+         localpath: /mnt/data0/shared/billing.txt
+         hdfspath: /mnt/data0/shared/billing
+         input_delimiter: pipe
+         descr: Billing table with only important fields with customer and product fields flattened onto it
+         columns: BILLINGDATE|NETQTY:int|REVENUE:float|CUSTOMER_KEY:int|PRODUCT|VERSION|PRODLANGUAGE|PRODID:int|CUSTOMER|STATE|COUNTRY
+         key: PRODUCT
+         data:
+          - 19950101|2|146072|9786617|DREAMWEAVER|3.0|DE|459816|CCP SOFTWARE GMBH|00|DE
+          - 19950101|10|488.3|10810812|DIRECTOR|8.0|UE|456393|HITACHI OPEN PLATFORM SOLUTIONS LTD|13|JP
+          - 19950101|10|487.6|10810812|DREAMWEAVER|3.0|UE|459816|HITACHI OPEN PLATFORM SOLUTIONS LTD|13|JP
+          - 19950101|5|217.6|10810812|FLASH|4.0|UE|458150|HITACHI OPEN PLATFORM SOLUTIONS LTD|13|JP
+       - name: customer
+         filepath: /mnt/data0/shared/customer.txt
+         path: customer.txt
+         input_delimiter: pipe
+         descr: CustomerMaster POC
+         columns        : CUSTOMER_KEY:Int|DATE_RECORD_CREATED|NAME|TERRITORY|LOCATION|REGION|REGION_NAME|COUNTRY_CODE|COUNTRY_NAME|CUSTOMER_ACCT_GROUP_NAME
+         key: CUSTOMER_KEY
+         data:
+         - 9653010|9/13/1995|ERINOAK|CENTRAL|MISSISSAUGA|ON|Ontario|CA|Canada|Sold-to party
+         - 9653013|9/13/1995|MICRO ACCESS|WESTERN|OGDEN|UT|Utah|US|United States|Sold-to party
+         - 9653014|9/13/1995|LUCERO COMPUTER PRODUCTS|WESTERN|IDAHO FALLS|ID|Idaho|US|United States|Sold-to party
+
+#       - name: product
+       - name: prodjoin
+         filepath: /mnt/data0/shared/product.txt
+         path: product.txt
+         input_delimiter: pipe
+         descr  : PRODUCT
+         columns        : MATERIAL|PRODUCT_KEY:Int|LONG_DESCRIPTION|PRODUCT_NAME|PRODUCT_DESCRIPTION|PRODUCT_VERSION|PRODUCT_VERSION_DESC|PRODUCT_LANGUAGE|MATERIAL_DESCRIPTION|PRODUCT_NAME_DESCRIPTION|REVENUE_MIX
+         key    : PRODUCT_KEY
+         data   : 000-749|1032||SPNT|#SUPERPAINT|305|3.0.5|UE|SP,MAC,3.5,CRD,NETWORK|#SuperPaint|OTH
+
+       - name: contact
+         filepath: /mnt/data0/shared/contact.txt
+         path: contact.txt
+         format: csv|pipe
+         descr  : contact file containing email addresses
+         columns        : CONTACT_FIRST_NAME|CONTACT_KEY|CONTACT_LAST_NAME|CREATE_DATE|CUST_NUM|DOMAIN_NAME|DOMAIN_NAME_DESC|EMAIL_ADDRESS|FIRST_PHONE_NUM|LAST_UPDATE_DATE|OPT_IN_EMAIL_FLG|OPT_IN_MAIL_FLG|OPT_IN_PHONE_FLG
+         key    : CONTACT_KEY
+         data :
+         - VEIKKO|62577|OKSANEN|11/6/2009 11:32:34 PM|0020013460|INVALIDILIILTTO.FI||VEIKKO.OKSANEN@INVALIDILIILTTO.FI|00358 9 1461144||||
+         - SUNG KOOK|62580|LIM|11/6/2009 11:32:34 PM|0020013461|HANMAIL.NET||MCASOCKR@HANMAIL.NET|82-54-859-7517||||
+         - CHANG WOO|62581|LEE|11/6/2009 11:32:34 PM|0020013462|HANMAIL.NET||DAY0126@HANMAIL.NET|82-2-2242-9644||||
+
+       - name: person
+         filepath: /mnt/data0/shared/person.txt
+         path: person.txt
+         format: csv|pipe
+         descr  : person aka individual
+         columns        : personid:int|addressid:int|firstname|middlename|lastname|birthdate:int|gender:int|zip:int
+         key    : personid
+         data :
+         - 1|1380712|HEATHER||STRUM|1973|20|0|0|95066
+         - 2|1144932|SCOTT||KNOLL|1971|20|0|0|94707
+
+       - name: address
+         filepath: /mnt/data0/shared/address.txt
+         path: address.txt
+         format: csv|pipe
+         descr  : person aka individual
+         columns : id:int|address|city|zip:int
+         key    : personid
+         data :
+         - 16|4400 CAPITOLA RD|CAPITOLA|CA|95010
+         - 17|500 N MAIN ST|YREKA|CA|96097
+
+       - name: email
+         filepath: /mnt/data0/shared/emailfiles.txt
+         path: emailfiles.txt
+         format: csv|pipe
+         descr  : email data for fuzzy matching
+         columns : email|valid:bool|birthdate
+         key    : email
+         data :
+         - rmullins@zone.com|False|
+         - balongnecker@zone.com|False|1973-12-05 00:00:00
+
+joins:
+  - name: sales-exact
+    searchtype: exact
+    searchkeys:
+    descr: joins customer and product to billing
+    tables:
+      - name: customer
+        alias: c
+        columns: customer_key,name, region, country_code
+        filters: 
+          - c.customer_key is not null
+      - name: billing
+        alias: b
+        columns: sum(revenue),sum(netqty) as total_quantity,state
+        filters: 
+          - b.customer_key is not null
+          - b.prodid is not null
+      - name: prodjoin
+        alias: p
+        columns: product_key, product_name
+        filters:
+          - p.product_key is not null
+    joins:
+      - name: customer to billing
+        condition: c.customer_key=b.customer_key
+        type: LEFT OUTER
+      - name: billing to product
+        condition: billing.prodid=prodjoin.product_key
+        type: LEFT OUTER
+    grouping_enabled: TRUE
+    having:
+      - table: customer
+        columns: customer_key
+        predicate: is not null
+      - table: prodjoin
+        columns: product_key
+        predicate: is not null
+    orderby:
+      - table: customer
+        columns: customer_key
+        direction: desc
+      - table: prodjoin
+        columns: product_key
+        direction: asc
+         
+#hive -e "create table prodjoin as select prodid as product_key, concat(prodid,' name') as prod_name, concat(prodid,' desc') as prod_descr from billing"
+
+    #sql: select c.name as custname, c.customer_key as custkey, c.region, c.region_name, b.state,  p.product_name, p.product_key prodkey, netqty, revenue
+    #       from customer c left outer join billing b on c.customer_key = b.customer_key left outer join product p on b.prodid =p.product_key;
+#  - name: sales-fuzzy
+#    searchtype: exact,fuzzy
+    #sql: select c.name as custname, c.customer_key as custkey, c.region, c.region_name, b.state,  p.product_name, p.product_key prodkey, netqty, revenue
+    #       from customer c left outer join billing b on c.customer_key ~= b.customer_key left outer join product p on b.prodid =p.product_key;

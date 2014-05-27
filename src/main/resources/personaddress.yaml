@@ -1,0 +1,71 @@
+tables:
+       - name: person
+         localpath: /mnt/data0/shared/person/individuals.txt
+         hdfspath: /mnt/data0/shared/person
+         input_delimiter: pipe
+         descr: person info including address id
+         columns: personid:int|addressid:int|firstname|middlename|lastname|BRTH_DT|GNDR_CDC|married|SOLC_IND|zip:int
+         key: personid
+         drop_if_exists: True
+#         drop_if_exists: False
+         data:
+          - 1|1380712|HEATHER||STRUM|1973|20|0|0|95066
+          - 2|1144932|SCOTT||KNOLL|1971|20|0|0|94707
+       - name: address
+         localpath: /mnt/data0/shared/address/address.txt
+         hdfspath: /mnt/data0/shared/address
+         input_delimiter: pipe
+         descr: address join for individuals (person) records
+         columns        : addressid:int|address|city|state|zip:int
+         key: addressid
+         drop_if_exists: True
+         data:
+         - 16|4400 CAPITOLA RDf|CAPITOLA|CA|95010
+         - 17|500 N MAIN ST|YREKA|CA|96097
+
+#       - name: personaddress
+#         filepath: /data0/shared/address.txt
+#         path: address.txt
+#         format: csv|pipe
+#         descr: address join for individuals (person) records
+#         columns        : addressid:int|address|city|state|zip:int
+#         key: addressid
+#         drop_if_exists: True
+joins:
+  - name: personaddress
+    searchtype: exact
+    searchkeys:
+    descr: joins person (individual) to address
+    tables:
+      - name: person
+        alias: p
+        columns: personid,firstname,lastname
+        filters:
+          - p.personid is not null
+      - name: address
+        alias: a
+        columns: addressid,address,city,state,zip
+        filters:
+          - a.addressid is not null
+    output_delimiter: pipe
+    output_table: personaddress
+    output_dir: /mnt/data0/shared/personaddress
+    joins:
+      - name: person to address
+        condition: p.addressid=a.addressid
+        type: LEFT OUTER
+    grouping_enabled: TRUE
+#    having:
+#      - table: person
+#        columns: personid
+#        predicate: is not null
+#      - table: address
+#        columns: addressid
+#        predicate: is not null
+    orderby:
+#      - table: person
+#        columns: last
+#        direction: asc
+      - table: address
+        columns: state,city,zip
+        direction: asc
